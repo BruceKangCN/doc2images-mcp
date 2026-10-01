@@ -1,0 +1,33 @@
+[project]
+name = "doc2images-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Bruce Kang", email = "brucekangcn@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "fastmcp>=4.0.10",
+    "pillow>=12.3.0",
+    "pypdfium2>=5.13.0",
+]
+
+[project.scripts]
+doc2images-mcp = "doc2images_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.12.21,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.9",
+    "uv-script>=0.1.9",
+]
+
+[tool.uvs.scripts]
+fmt = "ruff format"
+lint = "ruff check"
+test = "pytest --verbose"
