@@ -1,7 +1,5 @@
 """Shared pytest configuration for the doc2images-mcp test suite."""
 
-from __future__ import annotations
-
 import os
 from pathlib import Path
 

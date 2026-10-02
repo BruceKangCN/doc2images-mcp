@@ -8,8 +8,6 @@ PDF rendering is delegated to pypdfium2 (PDFium), which ships its own encoding
 data (including the CJK CMaps) and needs no external binaries.
 """
 
-from __future__ import annotations
-
 import io
 import os
 from pathlib import Path

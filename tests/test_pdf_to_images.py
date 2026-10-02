@@ -4,8 +4,6 @@ Sample PDFs live in ``data/``. Rendered pages are written under
 ``tmp/rendered/`` for manual inspection; that directory is git-ignored.
 """
 
-from __future__ import annotations
-
 import importlib
 import io
 import sys
