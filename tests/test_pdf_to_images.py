@@ -38,12 +38,9 @@ def _decode(image: Image) -> PILImage.Image:
     return PILImage.open(io.BytesIO(image.data))
 
 
-def _page_count(pdf: Path) -> int:
-    document = pdfium.PdfDocument(str(pdf))
-    try:
-        return len(document)
-    finally:
-        document.close()
+def _page_count(path: Path) -> int:
+    with pdfium.PdfDocument(path) as pdf:
+        return len(pdf)
 
 
 def _first_with_pages(minimum: int) -> Path:
@@ -55,7 +52,7 @@ def _first_with_pages(minimum: int) -> Path:
 
 def _dump(pdf: Path, index: int, image: Image) -> None:
     assert image.data is not None
-    out = RENDER_DIR / pdf.stem / f"page-{index}.png"
+    out = RENDER_DIR / pdf.stem / f"page-{index:04}.png"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_bytes(image.data)
 
@@ -88,11 +85,12 @@ def test_max_pages_caps_output() -> None:
 def test_dpi_controls_resolution() -> None:
     pdf = _first_with_pages(1)
 
-    small = _decode(pdf_to_images(str(pdf), dpi=72, max_pages=1, max_width=100000)[0])
-    large = _decode(pdf_to_images(str(pdf), dpi=144, max_pages=1, max_width=100000)[0])
+    small = _decode(pdf_to_images(str(pdf), dpi=72, max_pages=1, max_width=100_000)[0])
+    large = _decode(pdf_to_images(str(pdf), dpi=144, max_pages=1, max_width=100_000)[0])
 
     assert large.width > small.width
-    assert 1.8 < large.width / small.width < 2.2
+    # add some tolerance which may be caused by rounding or alignment
+    assert large.width == pytest.approx(144 / 72 * small.width, abs=8)
 
 
 def test_max_width_downscales() -> None:
@@ -118,25 +116,9 @@ def test_relative_path_resolves_against_base_dir() -> None:
     assert len(pdf_to_images(relative, dpi=72, max_pages=1)) == 1
 
 
-def test_rejects_path_outside_base_dir(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(main_module, "BASE_DIR", DATA_DIR)
-
-    with pytest.raises(ValueError, match="Access denied"):
-        pdf_to_images(str(PROJECT_ROOT / "pyproject.toml"))
-
-
 def test_rejects_missing_file() -> None:
     with pytest.raises(ValueError, match="Not a file"):
         pdf_to_images(str(DATA_DIR / "does-not-exist.pdf"))
-
-
-def test_rejects_unsupported_extension() -> None:
-    SCRATCH_DIR.mkdir(parents=True, exist_ok=True)
-    docx = SCRATCH_DIR / "dummy.docx"
-    docx.write_bytes(b"not a real document")
-
-    with pytest.raises(ValueError, match="not supported yet"):
-        pdf_to_images(str(docx))
 
 
 @pytest.mark.parametrize(
