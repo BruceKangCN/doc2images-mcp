@@ -73,24 +73,31 @@ def _render_pdf(
     max_width: int,
 ) -> list[Image]:
     try:
-        pdf = pdfium.PdfDocument(str(path))
+        with pdfium.PdfDocument(path) as pdf:
+            scale = dpi / PDFIUM_SCALE_BASE
+            start = first_page - 1
+            end = min(start + max_pages, len(pdf))
+            if last_page and last_page > 0:
+                end = min(end, last_page)
+            return _render_pages_to_images(pdf, scale, start, end, max_width)
     except pdfium.PdfiumError as exc:
         raise ValueError(f"Failed to open PDF: {path}") from exc
 
-    scale = dpi / PDFIUM_SCALE_BASE
+
+def _render_pages_to_images(
+    pdf: pdfium.PdfDocument,
+    scale: float,
+    start_index: int,
+    end_index: int,
+    max_width: int,
+) -> list[Image]:
     images: list[Image] = []
-    try:
-        # Cap the rendered range so we never rasterise more than max_pages pages.
-        end = min(first_page + max_pages - 1, len(pdf))
-        if last_page and last_page > 0:
-            end = min(end, last_page)
-        for index in range(first_page - 1, end):
-            # `scale` is of type `float`, but some language servers (e.g. Pyright)
-            # infer incorrect type information (`int`) from the default value.
-            bitmap = pdf[index].render(scale=scale)  # type: ignore
-            images.append(Image(data=_to_png(bitmap.to_pil(), max_width), format="png"))
-    finally:
-        pdf.close()
+    for i in range(start_index, end_index):
+        # `scale` is of type `float`, but some language servers (e.g. Pyright)
+        # infer incorrect type information (`int`) from the default value.
+        bitmap: pdfium.PdfBitmap = pdf[i].render(scale=scale)  # type: ignore
+        image = Image(data=_to_png(bitmap.to_pil(), max_width), format="png")
+        images.append(image)
     return images
 
 
@@ -103,7 +110,7 @@ def pdf_to_images(
     max_pages: int = DEFAULT_MAX_PAGES,
     max_width: int = DEFAULT_MAX_WIDTH,
 ) -> list[Image]:
-    """Render document pages to images for vision models.
+    """Render document pages to images.
 
     Returns one image per page. Use first_page/last_page/max_pages to limit how
     much of the document is sent to the model.
@@ -111,7 +118,7 @@ def pdf_to_images(
     Args:
         file_path: Path to the document. Relative paths resolve against
             DOC2IMG_BASE_DIR (defaults to the current working directory).
-        dpi: Rasterisation resolution, 72-300. Higher is sharper but larger.
+        dpi: Rasterisation resolution, 72-2400. Higher is sharper but larger.
         first_page: 1-based first page to render.
         last_page: 1-based last page to render; 0 means "until max_pages".
         max_pages: Hard cap on the number of pages returned (1-50).
@@ -121,9 +128,9 @@ def pdf_to_images(
         raise ValueError(f"dpi must be between {MIN_DPI} and {MAX_DPI}, got {dpi}")
     if first_page < 1:
         raise ValueError(f"first_page must be >= 1, got {first_page}")
-    if last_page and last_page < first_page:
+    if 0 < last_page < first_page:
         raise ValueError(
-            f"last_page ({last_page}) must be >= first_page ({first_page})"
+            f"last_page ({last_page}) must be >= first_page ({first_page}) or 0"
         )
     if not 1 <= max_pages <= HARD_MAX_PAGES:
         raise ValueError(
@@ -133,16 +140,7 @@ def pdf_to_images(
         raise ValueError(f"max_width must be >= 1, got {max_width}")
 
     path = _resolve(file_path)
-    suffix = path.suffix.lower()
-
-    if suffix == ".pdf":
-        return _render_pdf(path, dpi, first_page, last_page, max_pages, max_width)
-    if suffix in {".docx", ".pptx", ".ppt"}:
-        raise ValueError(
-            f"{suffix} is not supported yet. Install LibreOffice and enable the "
-            "Office branch (soffice --headless --convert-to pdf) to convert it."
-        )
-    raise ValueError(f"Unsupported file type: {suffix or '(no extension)'}")
+    return _render_pdf(path, dpi, first_page, last_page, max_pages, max_width)
 
 
 def main() -> None:
